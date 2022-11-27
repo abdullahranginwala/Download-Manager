@@ -2,13 +2,6 @@ import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
-import java.awt.event.KeyEvent;
-import java.awt.event.WindowAdapter;
-import java.awt.event.WindowEvent;
-import java.io.InputStream;
-import java.io.RandomAccessFile;
-import java.net.HttpURLConnection;
-import java.net.URL;
 import java.util.ArrayList;
 import java.util.Observable;
 import java.util.Observer;
@@ -16,10 +9,6 @@ import java.util.Observer;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JFrame;
-import javax.swing.JMenu;
-import javax.swing.JMenuBar;
-import javax.swing.JMenuItem;
-import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JProgressBar;
 import javax.swing.JScrollPane;
@@ -32,7 +21,8 @@ import javax.swing.table.AbstractTableModel;
 import javax.swing.table.TableCellRenderer;
 
 public class DownloadManager extends JFrame implements Observer {
-  private JTextField addTextField = new JTextField(30);
+  private JTextField nameTextField = new JTextField(15);
+  private JTextField sizeTextField = new JTextField(12);
 
   private DownloadsTableModel tableModel = new DownloadsTableModel();
 
@@ -49,30 +39,18 @@ public class DownloadManager extends JFrame implements Observer {
   private boolean clearing;
 
   public DownloadManager() {
-    setTitle("Download Manager");
+    setTitle("File Download Manager Simulator");
     setSize(640, 480);
-    addWindowListener(new WindowAdapter() {
-      public void windowClosing(WindowEvent e) {
-        System.exit(0);
-      }
-    });
-    JMenuBar menuBar = new JMenuBar();
-    JMenu fileMenu = new JMenu("File");
-    fileMenu.setMnemonic(KeyEvent.VK_F);
-    JMenuItem fileExitMenuItem = new JMenuItem("Exit", KeyEvent.VK_X);
-    fileExitMenuItem.addActionListener(new ActionListener() {
-      public void actionPerformed(ActionEvent e) {
-        System.exit(0);
-      }
-    });
-    fileMenu.add(fileExitMenuItem);
-    menuBar.add(fileMenu);
-    setJMenuBar(menuBar);
+    setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
 
     // Set up add panel.
     JPanel addPanel = new JPanel();
+  
+    nameTextField.setText("Enter the file name");
+    sizeTextField.setText("Enter the file size (MB)");
 
-    addPanel.add(addTextField);
+    addPanel.add(nameTextField);
+    addPanel.add(sizeTextField);
     JButton addButton = new JButton("Add Download");
     addButton.addActionListener(new ActionListener() {
       public void actionPerformed(ActionEvent e) {
@@ -82,7 +60,6 @@ public class DownloadManager extends JFrame implements Observer {
     addPanel.add(addButton);
 
     // Set up Downloads table.
-
     table = new JTable(tableModel);
     table.getSelectionModel().addListSelectionListener(new ListSelectionListener() {
       public void valueChanged(ListSelectionEvent e) {
@@ -119,6 +96,7 @@ public class DownloadManager extends JFrame implements Observer {
     });
     resumeButton.setEnabled(false);
     buttonsPanel.add(resumeButton);
+
     cancelButton = new JButton("Cancel");
     cancelButton.addActionListener(new ActionListener() {
       public void actionPerformed(ActionEvent e) {
@@ -127,6 +105,7 @@ public class DownloadManager extends JFrame implements Observer {
     });
     cancelButton.setEnabled(false);
     buttonsPanel.add(cancelButton);
+
     clearButton = new JButton("Clear");
     clearButton.addActionListener(new ActionListener() {
       public void actionPerformed(ActionEvent e) {
@@ -143,31 +122,14 @@ public class DownloadManager extends JFrame implements Observer {
   }
 
   private void actionAdd() {
-    URL verifiedUrl = verifyUrl(addTextField.getText());
-    if (verifiedUrl != null) {
-      tableModel.addDownload(new Download(verifiedUrl));
-      addTextField.setText(""); // reset add text field
-    } else {
-      JOptionPane.showMessageDialog(this, "Invalid Download URL", "Error",
-          JOptionPane.ERROR_MESSAGE);
-    }
-  }
 
-  private URL verifyUrl(String url) {
-    if (!url.toLowerCase().startsWith("http://"))
-      return null;
+    String name = nameTextField.getText();
+    float speed = Float.parseFloat(sizeTextField.getText());
 
-    URL verifiedUrl = null;
-    try {
-      verifiedUrl = new URL(url);
-    } catch (Exception e) {
-      return null;
-    }
+    tableModel.addDownload(new Download(name, speed));
+    nameTextField.setText(""); // reset add text field
+    sizeTextField.setText("");
 
-    if (verifiedUrl.getFile().length() < 2)
-      return null;
-
-    return verifiedUrl;
   }
 
   private void tableSelectionChanged() {
@@ -259,6 +221,8 @@ class Download extends Observable implements Runnable {
   public static final String STATUSES[] = { "Downloading", "Paused", "Complete", "Cancelled",
       "Error" };
 
+  public String name;
+
   public static final int DOWNLOADING = 0;
 
   public static final int PAUSED = 1;
@@ -269,18 +233,16 @@ class Download extends Observable implements Runnable {
 
   public static final int ERROR = 4;
 
-  private URL url; // download URL
+  private float size; // size of download in bytes
 
-  private int size; // size of download in bytes
-
-  private int downloaded; // number of bytes downloaded
+  private float downloaded; // number of bytes downloaded
 
   private int status; // current status of download
 
   // Constructor for Download.
-  public Download(URL url) {
-    this.url = url;
-    size = -1;
+  public Download(String name, Float size) {
+    this.name = name;
+    this.size = size;
     downloaded = 0;
     status = DOWNLOADING;
 
@@ -289,12 +251,12 @@ class Download extends Observable implements Runnable {
   }
 
   // Get this download's URL.
-  public String getUrl() {
-    return url.toString();
+  public String getName() {
+    return name;
   }
 
   // Get this download's size.
-  public int getSize() {
+  public float getSize() {
     return size;
   }
 
@@ -323,109 +285,27 @@ class Download extends Observable implements Runnable {
     stateChanged();
   }
 
-  private void error() {
-    status = ERROR;
-    stateChanged();
-  }
-
   private void download() {
     Thread thread = new Thread(this);
     thread.start();
   }
 
-  // Get file name portion of URL.
-  private String getFileName(URL url) {
-    String fileName = url.getFile();
-    return fileName.substring(fileName.lastIndexOf('/') + 1);
-  }
+  // Simulate download file.
+  public void run() { 
+    while(downloaded<= size) {
+      downloaded += 10;
+      stateChanged();
 
-  // Download file.
-  public void run() {
-    RandomAccessFile file = null;
-    InputStream stream = null;
-
-    try {
-      // Open connection to URL.
-      HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-
-      // Specify what portion of file to download.
-      connection.setRequestProperty("Range", "bytes=" + downloaded + "-");
-
-      // Connect to server.
-      connection.connect();
-
-      // Make sure response code is in the 200 range.
-      if (connection.getResponseCode() / 100 != 2) {
-        error();
+      try {
+        Thread.sleep(1000);
+      } catch (InterruptedException e) {
+        System.out.println(e);
       }
+    }
 
-      // Check for valid content length.
-      int contentLength = connection.getContentLength();
-      if (contentLength < 1) {
-        error();
-      }
-
-      /*
-       * Set the size for this download if it hasn't been already set.
-       */
-      if (size == -1) {
-        size = contentLength;
-        stateChanged();
-      }
-
-      // Open file and seek to the end of it.
-      file = new RandomAccessFile(getFileName(url), "rw");
-      file.seek(downloaded);
-
-      stream = connection.getInputStream();
-      while (status == DOWNLOADING) {
-        /*
-         * Size buffer according to how much of the file is left to download.
-         */
-        byte buffer[];
-        if (size - downloaded > MAX_BUFFER_SIZE) {
-          buffer = new byte[MAX_BUFFER_SIZE];
-        } else {
-          buffer = new byte[size - downloaded];
-        }
-
-        // Read from server into buffer.
-        int read = stream.read(buffer);
-        if (read == -1)
-          break;
-
-        // Write buffer to file.
-        file.write(buffer, 0, read);
-        downloaded += read;
-        stateChanged();
-      }
-
-      /*
-       * Change status to complete if this point was reached because downloading
-       * has finished.
-       */
-      if (status == DOWNLOADING) {
-        status = COMPLETE;
-        stateChanged();
-      }
-    } catch (Exception e) {
-      error();
-    } finally {
-      // Close file.
-      if (file != null) {
-        try {
-          file.close();
-        } catch (Exception e) {
-        }
-      }
-
-      // Close connection to server.
-      if (stream != null) {
-        try {
-          stream.close();
-        } catch (Exception e) {
-        }
-      }
+    if (status == DOWNLOADING) {
+      status = COMPLETE;
+      stateChanged();
     }
   }
 
@@ -478,12 +358,12 @@ class DownloadsTableModel extends AbstractTableModel implements Observer {
     Download download = downloadList.get(row);
     switch (col) {
     case 0: // URL
-      return download.getUrl();
+      return download.getName();
     case 1: // Size
-      int size = download.getSize();
-      return (size == -1) ? "" : Integer.toString(size);
+      float size = download.getSize();
+      return (size == -1) ? "" : Float.toString(size);
     case 2: // Progress
-      return new Float(download.getProgress());
+      return download.getProgress();
     case 3: // Status
       return Download.STATUSES[download.getStatus()];
     }
